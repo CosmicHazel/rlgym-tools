@@ -31,7 +31,7 @@ class GameCondition(DoneCondition[AgentID, GameState]):
         scoreboard: ScoreboardInfo = shared_info["scoreboard"]
 
         done = False
-        if scoreboard.go_to_kickoff or scoreboard.is_over:
+        if scoreboard.is_over:
             done = True
         elif scoreboard.is_overtime:
             self.overtime_duration += (state.tick_count - self.last_ticks) / TICKS_PER_SECOND

@@ -25,7 +25,9 @@ class ScoreboardInfo:
 
     @property
     def is_overtime(self):
-        return math.isinf(self.game_timer_seconds) and self.blue_score == self.orange_score
+        return (
+            math.isinf(self.game_timer_seconds) and self.blue_score == self.orange_score
+        )
 
     @property
     def is_kickoff(self):
@@ -52,7 +54,7 @@ class ScoreboardProvider(SharedInfoProvider[AgentID, GameState]):
             # Default behavior is infinite overtime, basically the same as no scoreboard
             shared_info["scoreboard"] = ScoreboardInfo(
                 game_timer_seconds=math.inf,
-                kickoff_timer_seconds=0.,
+                kickoff_timer_seconds=0.0,
                 blue_score=0,
                 orange_score=0,
                 go_to_kickoff=False,
@@ -60,15 +62,24 @@ class ScoreboardProvider(SharedInfoProvider[AgentID, GameState]):
             )
         return shared_info
 
-    def set_state(self, agents: List[AgentID], initial_state: GameState, shared_info: Dict[str, Any]) -> Dict[str, Any]:
+    def set_state(
+        self,
+        agents: List[AgentID],
+        initial_state: GameState,
+        shared_info: Dict[str, Any],
+    ) -> Dict[str, Any]:
         info = shared_info.get("scoreboard")
         if info is None:
-            raise ValueError("ScoreboardProvider requires a 'scoreboard' key in shared_info")
+            raise ValueError(
+                "ScoreboardProvider requires a 'scoreboard' key in shared_info"
+            )
 
         if isinstance(info, dict):
             info = ScoreboardInfo(**info)
 
-        assert not any(v is None for v in asdict(info).values()), "ScoreboardInfo must be fully defined"
+        assert not any(
+            v is None for v in asdict(info).values()
+        ), "ScoreboardInfo must be fully defined"
 
         if info.is_over:
             raise ValueError("Cannot set scoreboard to be over")
@@ -80,7 +91,9 @@ class ScoreboardProvider(SharedInfoProvider[AgentID, GameState]):
         shared_info["scoreboard"] = info
         return shared_info
 
-    def step(self, agents: List[AgentID], state: GameState, shared_info: Dict[str, Any]) -> Dict[str, Any]:
+    def step(
+        self, agents: List[AgentID], state: GameState, shared_info: Dict[str, Any]
+    ) -> Dict[str, Any]:
         ticks_passed = state.tick_count - self.last_ticks
         self.last_ticks = state.tick_count
 
@@ -92,7 +105,14 @@ class ScoreboardProvider(SharedInfoProvider[AgentID, GameState]):
                 info.blue_score += 1
             else:
                 info.orange_score += 1
+            if info.game_timer_seconds == math.inf:  # Overtime
+                info.is_over = True
             info.go_to_kickoff = True
+            print(
+                "GOAL SCORED: BLUE {} - {} ORANGE".format(
+                    info.blue_score, info.orange_score
+                )
+            )
 
         if info.kickoff_timer_seconds > 0 and state.ball.position[2] == 0:
             info.kickoff_timer_seconds -= ticks_passed / TICKS_PER_SECOND
@@ -101,6 +121,18 @@ class ScoreboardProvider(SharedInfoProvider[AgentID, GameState]):
         else:
             info.kickoff_timer_seconds = 0
             info.game_timer_seconds -= ticks_passed / TICKS_PER_SECOND
+            if not math.isinf(info.game_timer_seconds):
+                if int(info.game_timer_seconds) // 60 < int(
+                    (info.game_timer_seconds + ticks_passed / TICKS_PER_SECOND) // 60
+                ):
+                    print(
+                        "TIME LEFT: {}:{} - BLUE {} - {} ORANGE".format(
+                            int(info.game_timer_seconds // 60),
+                            int(info.game_timer_seconds % 60),
+                            info.blue_score,
+                            info.orange_score,
+                        )
+                    )
 
         if info.game_timer_seconds <= 0:
             info.game_timer_seconds = 0
@@ -108,8 +140,21 @@ class ScoreboardProvider(SharedInfoProvider[AgentID, GameState]):
                 if info.blue_score == info.orange_score:
                     info.game_timer_seconds = math.inf
                     info.go_to_kickoff = True
+                    print(
+                        "OVERTIME: BLUE {} - {} ORANGE".format(
+                            info.blue_score, info.orange_score
+                        )
+                    )
+
                 else:
                     info.is_over = True
+
+        if info.is_over:
+            print(
+                "GAME OVER: BLUE {} - {} ORANGE".format(
+                    info.blue_score, info.orange_score
+                )
+            )
 
         self.info = info
         shared_info["scoreboard"] = self.info
